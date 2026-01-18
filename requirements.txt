@@ -1,0 +1,6 @@
+python-telegram-bot==20.7
+```
+
+**2. `Procfile`** (без расширения! команда запуска):
+```
+worker: python engl.py
