@@ -98,7 +98,7 @@ AI_TOOLS = """🤖 Нейросети для изучения английско
 
 # PDF файл с промптами закодирован в base64 (добавьте свой файл)
 # Инструкция: используйте online base64 encoder для конвертации PROMT.pdf
-PROMPTS_PDF_URL = "https://your-storage.com/PROMT.pdf"  # Или загрузите на GitHub и укажите ссылку
+PROMPTS_PDF_URL = "https://github.com/catthecat3/engbot18/blob/main/PROMT.pdf"  # Или загрузите на GitHub и укажите ссылку
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Приветственное сообщение при старте бота"""
@@ -253,3 +253,4 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b'Bot is running!')
+
