@@ -1,13 +1,8 @@
-import logging
+import os
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-
-# Настройка логирования
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+from http.server import BaseHTTPRequestHandler
 
 # Материалы по уровням
 MATERIALS = {
@@ -101,6 +96,10 @@ AI_TOOLS = """🤖 Нейросети для изучения английско
 
 ⚠️ Важно помнить, что эффективное использование ИИ начинается с качественных промптов (запросов или инструкций для нейросети)! 🌟"""
 
+# PDF файл с промптами закодирован в base64 (добавьте свой файл)
+# Инструкция: используйте online base64 encoder для конвертации PROMT.pdf
+PROMPTS_PDF_URL = "https://your-storage.com/PROMT.pdf"  # Или загрузите на GitHub и укажите ссылку
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Приветственное сообщение при старте бота"""
     user = update.effective_user
@@ -133,10 +132,8 @@ async def level_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     level = query.data.replace('level_', '')
     
-    # Отправляем материалы для выбранного уровня
     await query.message.reply_text(MATERIALS[level])
     
-    # Предлагаем дополнительные опции
     keyboard = [
         [InlineKeyboardButton("🤖 Нейросети для изучения", callback_data='show_ai_tools')],
         [InlineKeyboardButton("🔄 Изменить уровень", callback_data='change_level')],
@@ -156,25 +153,16 @@ async def show_ai_tools(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     
     await query.message.reply_text(AI_TOOLS)
     
-    # Отправляем сообщение о промптах
     prompts_text = """Важно помнить, что эффективное использование ИИ начинается с качественных промптов (это запрос, команда или набор инструкций, которые пользователь передаёт нейросети для выполнения определённой задачи) 🌟
 
 👩‍🎓 Из-за этого мы добавили файл с лучшими промптами для работы с ИИ (для каждой сферы изучения английского языка)"""
     
     await query.message.reply_text(prompts_text)
     
-    # Отправляем файл с промптами
-    # Замените 'Промпты.pdf' на путь к вашему файлу
-    try:
-        await query.message.reply_document(
-            document='C:/Users/milky/Desktop/engl/PROMT.pdf',
-            caption='📄 Лучшие промпты для изучения английского с ИИ'
-        )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке файла: {e}")
-        await query.message.reply_text(
-            "⚠️ К сожалению, не удалось отправить файл. Обратитесь к администратору."
-        )
+    # Отправляем ссылку на файл (т.к. на Vercel нельзя хранить файлы)
+    await query.message.reply_text(
+        f"📄 Скачать промпты: {PROMPTS_PDF_URL}"
+    )
     
     keyboard = [
         [InlineKeyboardButton("🔙 Назад", callback_data='main_menu')]
@@ -219,24 +207,49 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=reply_markup
     )
 
-def main() -> None:
-    """Запуск бота"""
-    # Замените 'YOUR_BOT_TOKEN' на токен вашего бота от @BotFather
-    TOKEN = '8313872910:AAG4cTiJBObHScvMngsiIF_LZ7s0N9Q3oWk'
+# Webhook handler для Vercel
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        
+        # Получаем токен из переменных окружения
+        TOKEN = os.environ.get('BOT_TOKEN')
+        
+        if not TOKEN:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b'Bot token not configured')
+            return
+        
+        # Создаем приложение
+        application = Application.builder().token(TOKEN).build()
+        
+        # Регистрируем обработчики
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CallbackQueryHandler(level_selected, pattern='^level_'))
+        application.add_handler(CallbackQueryHandler(show_ai_tools, pattern='^show_ai_tools$'))
+        application.add_handler(CallbackQueryHandler(change_level, pattern='^change_level$'))
+        application.add_handler(CallbackQueryHandler(main_menu, pattern='^main_menu$'))
+        
+        # Обрабатываем обновление
+        try:
+            update_data = json.loads(post_data.decode('utf-8'))
+            update = Update.de_json(update_data, application.bot)
+            
+            # Запускаем обработку
+            import asyncio
+            asyncio.run(application.process_update(update))
+            
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'OK')
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(f'Error: {str(e)}'.encode())
     
-    # Создание приложения
-    application = Application.builder().token(TOKEN).build()
-    
-    # Регистрация обработчиков
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(level_selected, pattern='^level_'))
-    application.add_handler(CallbackQueryHandler(show_ai_tools, pattern='^show_ai_tools$'))
-    application.add_handler(CallbackQueryHandler(change_level, pattern='^change_level$'))
-    application.add_handler(CallbackQueryHandler(main_menu, pattern='^main_menu$'))
-    
-    # Запуск бота
-    logger.info("Бот запущен!")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
-
-if __name__ == '__main__':
-    main()
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
