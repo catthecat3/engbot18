@@ -1,0 +1,6 @@
+version: "1"
+
+services:
+  bot:
+    type: python
+    start: python bot.py
